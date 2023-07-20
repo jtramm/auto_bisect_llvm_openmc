@@ -2,9 +2,6 @@
 
 TEST_START=$SECONDS
 
-VAR=$(hostname)
-printf "hostname = %s\n" $VAR
-
 START_DIR=$PWD
 
 TEST_DIR=/gpfs/jlse-fs0/projects/intel_anl_shared/openmc_data/compilers/auto_bisect_llvm_openmc
