@@ -18,6 +18,12 @@ cd /gpfs/jlse-fs0/projects/intel_anl_shared/openmc_data/compilers
 # Compile LLVM
 ./compile_llvm_ci.sh
 
+LLVM_COMPILE_FAIL=1
+CLANG_EXE=/gpfs/jlse-fs0/projects/intel_anl_shared/openmc_data/compilers/llvm-install-ci/bin/clang
+if [ -f "$CLANG_EXE" ]; then
+  LLVM_COMPILE_FAIL=0
+fi
+
 # Load new LLVM environment
 module use /gpfs/jlse-fs0/projects/intel_anl_shared/openmc_data/Modules/modulefiles
 
@@ -60,10 +66,17 @@ EXIT_CODE=$?
 TEST_RESULT=$(cat ${TEST_LOG}      | grep "Absorption" | cut -d '=' -f 2 | xargs)
 EXPECTED_RESULT=$(cat expected_results.txt | grep "Absorption" | cut -d '=' -f 2 | xargs)
 
-PASS=1
+FAIL=1
 if [ "$TEST_RESULT" == "$EXPECTED_RESULT" ]
 then
-  PASS=0
+  FAIL=0
+fi
+
+# Set code of 125 if LLVM failed to compile. This code tells git to "skip" this commit, as we don't know if this was actually where it broke
+ONE_VAL=1
+if [ "$ONE_VAL" == "$LLVM_COMPILE_FAIL" ]
+then
+  FAIL=125
 fi
 
 # Compute FOM
@@ -74,10 +87,10 @@ FOM=$(cat ${TEST_LOG} | grep "(inactive" | cut -d '=' -f 2 | cut -d 'p' -f 1 | c
 MACHINE_NAME=$(hostname)
 TEST_TIME=$(( SECONDS - TEST_START ))
 
-printf "%s, %s, %d, %.5f, %d, %f, %s, %d, %d\n" $CLANG_VERSION $OPENMC_VERSION $PASS $TEST_RESULT $EXIT_CODE $FOM $MACHINE_NAME $COMPILE_TIME $TEST_TIME >> $HISTORICAL_LOG
+printf "%s, %s, %d, %.5f, %d, %f, %s, %d, %d\n" $CLANG_VERSION $OPENMC_VERSION $FAIL $TEST_RESULT $EXIT_CODE $FOM $MACHINE_NAME $COMPILE_TIME $TEST_TIME >> $HISTORICAL_LOG
 
 # Return true/false code to caller based on correctness
 
 cd $START_DIR
 
-exit $PASS
+exit $FAIL
