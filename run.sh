@@ -1,8 +1,16 @@
 #!/bin/bash
 
+TEST_START=$SECONDS
+
+VAR=$(hostname)
+printf "hostname = %s\n" $VAR
+
 START_DIR=$PWD
 
-HISTORICAL_LOG=$START_DIR/historical_log.csv
+TEST_DIR=/gpfs/jlse-fs0/projects/intel_anl_shared/openmc_data/compilers/auto_bisect_llvm_openmc
+
+HISTORICAL_LOG=$TEST_DIR/historical_log.csv
+TEST_LOG=$TEST_DIR/test_results.txt
 
 # Navigate to LLVM outer directory
 cd /gpfs/jlse-fs0/projects/intel_anl_shared/openmc_data/compilers
@@ -30,17 +38,19 @@ cd build
 CLANG_VERSION=$(clang++ --version | grep version | cut -d ' ' -f 5 | cut -d ')' -f 1)
 OPENMC_VERSION=$(git rev-parse HEAD)
 
-cmake --preset=llvm_mi250 -Dcuda_thrust_sort=off -Dsycl_sort=off -Dhip_thrust_sort=on -Ddebug=off -Ddevice_printf=off -Doptimize=on -DCMAKE_INSTALL_PREFIX=./install ..
-make install
+COMPILE_START=$SECONDS
+
+cmake --preset=llvm_mi250 -Dcuda_thrust_sort=off -Dsycl_sort=off -Dhip_thrust_sort=on -Ddebug=off -Ddevice_printf=off -Doptimize=on -DCMAKE_INSTALL_PREFIX=./install .. &> $TEST_LOG
+make install &>> $TEST_LOG
+
+COMPILE_TIME=$(( SECONDS - COMPILE_START ))
 
 module load openmc/ci
 
 # Run OpenMC Test, storing results in a file
 cd /gpfs/jlse-fs0/projects/intel_anl_shared/openmc_data/compilers/openmc_offloading_benchmarks/progression_tests/XXL
 
-TEST_LOG=test_results.txt
-
-timeout 300 openmc --event &> $TEST_LOG
+timeout 180 openmc --event &>> $TEST_LOG
 
 EXIT_CODE=$?
 
@@ -61,7 +71,10 @@ FOM=$(cat ${TEST_LOG} | grep "(inactive" | cut -d '=' -f 2 | cut -d 'p' -f 1 | c
 
 # Output to historical log
 
-printf "%s, %s, %d, %.5f, %d, %.2e\n" $CLANG_VERSION $OPENMC_VERSION $PASS $TEST_RESULT $EXIT_CODE $FOM  >> $HISTORICAL_LOG
+MACHINE_NAME=$(hostname)
+TEST_TIME=$(( SECONDS - TEST_START ))
+
+printf "%s, %s, %d, %.5f, %d, %f, %s, %d, %d\n" $CLANG_VERSION $OPENMC_VERSION $PASS $TEST_RESULT $EXIT_CODE $FOM $MACHINE_NAME $COMPILE_TIME $TEST_TIME >> $HISTORICAL_LOG
 
 # Return true/false code to caller based on correctness
 
